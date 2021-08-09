@@ -1,0 +1,34 @@
+<p>If these posts don’t make sense sorry. They are for my notes.</p>
+
+<p>API is based on REST. A lot of data is sensitive so they use SSL to secure data transfer. Prefer XML elements over XML attributes. Everything is UTF-8 encoded. Right now user access is limited to LDS members. That is interesting. I guess you have to have a membership number so that you can access the API, but they will change that over time.</p>
+
+<p>They need to go faster. This is all pretty bla so far.</p>
+
+<p>Query looks like this:</p>
+
+<p>https://api.familysearch.org/{module}/{version}/{endoint}/{id}</p>
+
+<p>You need a developer key. Keys are tied to individuals so they can get a hold of you when you break something.</p>
+
+<p>Login like this:</p>
+
+<p>https://api.familysearch.org/identity/v1/login?key=MMMM-MMMM-MMMM-MMMM-MMMM-MMMM-MMMM-MMMM</p>
+
+<p>You will have to sign an agreement to get a key.</p>
+
+<p>After you authenticate you get a session key which you then have to pass back on each request. They give you back xml for each request.</p>
+
+<p>It looks like you have to send an email and justify your reason for access to get a key. It would be nice if this process were simpler and faster. Because the api is REST based you can hit the read sections in a browser. We could al be sitting here playing with it if we could get keys.</p>
+
+<p>They are listing the opportunities they think are available:</p>
+
+<ul>
+  <li>Synchronization</li>
+  <li>Tree Cleaning</li>
+  <li>Interactive GedCom import</li>
+  <li>Charts and Printing</li>
+</ul>
+
+<p>They will be adding throttling to control how much data third party applications download. They are going to add a new authorization model. They will also be adding read only guest access.</p>
+
+<p>The developer website is</p>

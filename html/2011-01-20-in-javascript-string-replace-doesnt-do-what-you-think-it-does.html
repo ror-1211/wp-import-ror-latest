@@ -1,0 +1,25 @@
+<p>When doing a string replace in javascript if you try something like this:</p>
+
+<pre><code>var str = 'test';
+str.replace('t', 's');
+</code></pre>
+
+<p>You’ll find that the result is:</p>
+
+<pre><code>sest
+</code></pre>
+
+<p>The replace method in javascript is not a global replace. Instead it does a single replace and moves on.</p>
+
+<p>If you want to do a global replace try using a regular expression instead:</p>
+
+<pre><code>var str = 'test';
+str.replace(/t/g, 's');
+</code></pre>
+
+<p>the result will be:</p>
+
+<pre><code>sess
+</code></pre>
+
+<p>The reason for that is the ‘g’ hanging of the end of the expression /t/g. That tells javascript that the replace should be global.</p>

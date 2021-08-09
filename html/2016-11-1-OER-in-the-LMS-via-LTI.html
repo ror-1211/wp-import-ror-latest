@@ -1,0 +1,33 @@
+<h3>Resources from my presentation at Open Ed 2016:</h3>
+<ul>
+  <li>LTI Lambda function: <a href="https://github.com/atomicjolt/lti-lambda">https://github.com/atomicjolt/lti-lambda</a></li>
+  <li>LTI Starter App: <a href="https://github.com/atomicjolt/lti_starter_app">https://github.com/atomicjolt/lti_starter_app</a></li>
+  <li>Open Assessments: <a href="https://github.com/atomicjolt/OpenAssessments">https://github.com/atomicjolt/OpenAssessments</a></li>
+  <li>Open Assessments Client: <a href="https://github.com/atomicjolt/OpenAssessmentsClient">https://github.com/atomicjolt/OpenAssessmentsClient</a></li>
+  <li>React Client Starter App: <a href="https://github.com/atomicjolt/react_client_starter_app">https://github.com/atomicjolt/react_client_starter_app</a></li>
+  <li>Wordpress as an LTI consumer <a href="https://github.com/Saltbox/wordpress-lti-consumer">https://github.com/Saltbox/wordpress-lti-consumer</a></li>
+  <li>Wordpress as an LTI provider <a href="https://github.com/lumenlearning/lti">https://github.com/lumenlearning/lti</a></li>
+</ul>
+
+<h3>Example LTI configuration</h3>
+
+<p><code>
+  &lt;?xml version="1.0" encoding="UTF-8"?&gt;
+    &lt;cartridge_basiclti_link xmlns="http://www.imsglobal.org/xsd/imslticc_v1p0" xmlns:blti="http://www.imsglobal.org/xsd/imsbasiclti_v1p0" xmlns:lticm="http://www.imsglobal.org/xsd/imslticm_v1p0" xmlns:lticp="http://www.imsglobal.org/xsd/imslticp_v1p0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/imslticc_v1p0 http://www.imsglobal.org/xsd/lti/ltiv1p0/imslticc_v1p0.xsd http://www.imsglobal.org/xsd/imsbasiclti_v1p0 http://www.imsglobal.org/xsd/lti/ltiv1p0/imsbasiclti_v1p0p1.xsd http://www.imsglobal.org/xsd/imslticm_v1p0 http://www.imsglobal.org/xsd/lti/ltiv1p0/imslticm_v1p0.xsd http://www.imsglobal.org/xsd/imslticp_v1p0 http://www.imsglobal.org/xsd/lti/ltiv1p0/imslticp_v1p0.xsd"&gt;
+      &lt;blti:title&gt;LTI Lambda&lt;/blti:title&gt;
+      &lt;blti:description&gt;LTI Lambda example&lt;/blti:description&gt;
+      &lt;blti:launch_url&gt;https://7z1do2p8ra.execute-api.us-east-1.amazonaws.com/dev/lti&lt;/blti:launch_url&gt;
+      &lt;blti:icon&gt;https://7z1do2p8ra.execute-api.us-east-1.amazonaws.com/dev/images/oauth_icon.png&lt;/blti:icon&gt;
+      &lt;blti:extensions platform="canvas.instructure.com"&gt;
+        &lt;lticm:options name="course_navigation"&gt;
+          &lt;lticm:property name="default"&gt;enabled&lt;/lticm:property&gt;
+          &lt;lticm:property name="enabled"&gt;true&lt;/lticm:property&gt;
+          &lt;lticm:property name="text"&gt;LTI Lambda&lt;/lticm:property&gt;
+          &lt;lticm:property name="url"&gt;https://7z1do2p8ra.execute-api.us-east-1.amazonaws.com/dev/lti&lt;/lticm:property&gt;
+          &lt;lticm:property name="visibility"&gt;public&lt;/lticm:property&gt;
+        &lt;/lticm:options&gt;
+        &lt;lticm:property name="domain"&gt;https://7z1do2p8ra.execute-api.us-east-1.amazonaws.com&lt;/lticm:property&gt;
+        &lt;lticm:property name="privacy_level"&gt;public&lt;/lticm:property&gt;
+      &lt;/blti:extensions&gt;
+    &lt;/cartridge_basiclti_link&gt;
+ </code></p>

@@ -1,0 +1,86 @@
+<p>The review is actually less painful than I would have thought.  They are looking at parts of the code and giving specific feedback on code blocks.  Here’s a quick summary:</p>
+
+<p>‘and’  and ‘or’ are different than ‘||’ and ‘&amp;&amp;’.  The second returns boolean values.  The first returns strings.    Avoid using ‘and’ and ‘or’.
+When dealing with errors.  Try to use exceptions instead of booleans and procedures.</p>
+
+<p>Putting models in the application.rb file is depricated and probably a bad idea anyway.  - As an excuse, we never liked that, but it was required by the login engine which we have gotten rid of.</p>
+
+<p>Empower your models.  Include as much data validation and manipulation in the model as possible.</p>
+
+<p>How to deal with business requirements that span models?  Create a model that spans the logic.</p>
+
+<p>Keep your controllers “skinny”.  If your view doesn’t require any code do this:</p>
+<pre><code class="ruby">
+def about
+  render
+end
+&lt;/pre&gt;</code>
+That lets you sort of self document your code.
+
+Use exceptions.  Nested ifs are ugly and if elsif is bad.  In the code proceed with the assumption that you were successful and catch problems in exceptions.
+
+Extract stuff from views into helpers.  ie The views have long lines that look like this:
+
+<pre><code class="ruby">
+  &lt;li &lt;%if @current_tab == &quot;popular&quot; %&gt;class=&quot;current&quot;&lt;% end %&gt;&gt;&lt;%= link_to(&quot;Popular&quot;, :action =&gt; &quot;index&quot;) %&gt;&lt;/li&gt;
+&lt;/pre&gt;</code>
+
+they should look like this:
+
+<pre><code class="ruby">
+  &lt;%= tab &#039;popular&#039; %&gt;
+  def tab(name, options={})
+    lang = _(name)
+    s = "li&gt;"
+    s &lt;&lt; "class='current'" if @current_tab == options[:name] || name.downcase
+    s &lt;&lt; "&gt;"
+    s &lt;&lt; link_to(lang, options[:url] || send("#{name.downcase}_path"))
+    s &lt;&lt; "&lt;/li&gt;"
+  end
+&lt;/pre&gt;</code>
+
+Instead of this:
+
+<pre><code class="ruby">
+  &lt;% if @editable %&gt;
+  &lt;% end %&gt;
+&lt;/pre&gt;</code>
+
+Do this:
+<pre><code class="ruby">
+  &lt;% editable do %&gt;
+    stuff
+  &lt;% end %&gt;
+&lt;/pre&gt;</code>
+
+In the helper add this:
+
+<pre><code class="ruby">
+def editable(&amp;block)
+  concat(block.call, block.binding) if @editable
+end
+&lt;/pre&gt;</code>
+
+which also lets you do stuff like this:
+
+<pre><code class="ruby">
+def editable(&amp;block)
+  concat("<div>Look")
+  concat(block.call, block.binding) if @editable
+end
+&lt;/pre&gt;&lt;/code&gt;
+
+I talked to Jamis a bit about Rails.  A couple of questions I had:
+
+How do you test your rss, xml etc if you use responds_to?
+set :format =&gt; 'xml' in your get in the test.
+
+How do you share code and manage it between applications?
+Use plugins.  They use propset when in development, but do plugin install when they deploy so that the plugin version is locked.
+
+They are going to send us their feedback which we will take to heart.
+
+
+
+
+</div></code></pre></pre></pre></pre></pre></pre></pre>

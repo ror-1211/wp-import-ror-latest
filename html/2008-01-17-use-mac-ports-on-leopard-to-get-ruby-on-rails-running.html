@@ -1,0 +1,45 @@
+<p>I am stealing this from <a href="http://www.appeddesign.com/apropos">Dave South</a>, <a href="http://groups.google.com/group/loganrb">Logan Ruby User Group</a> Illuminati. If I don’t extract it from my email I’ll never find it again. So I’ll ask for Dave’s forgiveness for the blatant plagiarism.</p>
+
+<p>Install MacPorts, first:</p>
+
+<p>http://www.macports.org</p>
+
+<p>Be sure to put /opt/local/bin and /opt/local/sbin in your path.</p>
+
+<p>PORT programs to install:
+sudo port install mysql5 server
+sudo port install ImageMagick
+sudo port install ruby
+sudo port install rb-rubygems
+sudo port install rb-termios
+sudo port install rb-mysql</p>
+
+<p>Update GEM:
+sudo gem list -r
+sudo gem update –system</p>
+
+<p>GEMs to install:
+sudo gem install rake
+sudo gem install rails
+sudo gem install capistrano
+sudo gem install mongrel
+sudo gem install redgreen
+sudo gem install test-spec
+sudo gem install RedCloth
+sudo gem install pdf-writer
+sudo gem install ZenTest
+sudo gem install mini_magick
+sudo gem install ruby-debug</p>
+
+<p>Remember to install the mysql startup. Also, I add a mysql link in /
+opt/local/bin similar to the mysql5 link.</p>
+
+<p>To initialize the mysql database:
+sudo mysql_install_db5 –user=mysql</p>
+
+<p>To install the mysql5 startup:
+sudo launchctl load -w /Library/LaunchDaemons/org.macports.mysql5.plist</p>
+
+<p>To link mysql to the correct binary:
+cd /opt/local/bin
+ln -s ../lib/mysql5/bin/mysql mysql</p>

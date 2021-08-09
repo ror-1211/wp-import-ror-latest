@@ -1,0 +1,5 @@
+<p>I’ve been experimenting with Ruby gems over the past few weeks. I use a couple of other gems to make the process easier including <a href="http://rubyforge.org/projects/codeforpeople">rubyforge</a>, <a href="http://github.com/technicalpickles/jeweler/tree/master">jeweler</a> and <a href="http://newgem.rubyforge.org/">newgem</a>.</p>
+
+<p>Jeweler has a rake task ‘rubyforge:release’ that uploads your gem for you. The problem was that it would timeout and give me “Couldn’t get release_id, upload failed?”. I assumed that I had configured something wrong so I tried to upload the file directly to rubyforge. That didn’t work either so I assumed (wrongly) that my project had something wrong with it. I was about to give up when I decided to check my gem size. It was 100MB!</p>
+
+<p>Somehow I was packaging the gem inside itself on each release and it had grown into a beast. So if your release is timing out check your gem size and make sure it isn’t going nuts.</p>

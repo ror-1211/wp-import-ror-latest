@@ -1,0 +1,53 @@
+<p>I recently moved over to a new Macbook Pro which is awesome but like every other time I’ve switched computers there’s some serious pain. This time around various changes from Apple including the removal of the command line tools from XCode has <a href="https://rvm.io/">Ruby Version Manager (RVM)</a> a bit more difficult to use. If you aren’t using RVM and you work with Ruby you know that it’s indispensable and even if it’s painful to get things working right it’s worth it.</p>
+
+<p>In the interest of saving time for myself and hopefully others in the future here’s what I ended up doing:</p>
+
+<ol>
+  <li>Install XCode and the command line tools. It’s a free install from the app store but takes some time to download. After XCode is installed install the Command Line Tools via Xcode Preferences =&gt; Downloads</li>
+  <li>Download and install XQuartz from: http://xquartz.macosforge.org/landing/. After installing XQuartz you’ll need to log out/in or just restart.</li>
+  <li><a href="http://mxcl.github.com/homebrew/">Install Homebrew</a>. If you don’t have it you should.</li>
+  <li>
+    <p>Update Homebrew and install required packages:
+    brew update
+    brew tap homebrew/dupes
+    brew install autoconf automake apple-gcc42 tcl libksba</p>
+  </li>
+  <li>
+    <p>Default to gcc 4.2 by adding this to ~/.profile:
+    export CC=/usr/local/bin/gcc-4.2</p>
+  </li>
+  <li>
+    <p>Install the very latest rvm:
+    curl -L https://get.rvm.io | bash</p>
+
+    <p>(There are some fixes in Head that are required as of the date I’m writing this post. They’ll probably make it into stable soon.)
+*   Fix ssl problems:
+        rvm pkg install openssl</p>
+
+    <ul>
+      <li>
+        <p>Install Ruby:
+1.9.3:</p>
+
+        <pre><code>rvm install 1.9.3
+</code></pre>
+
+        <p>In case you want the debugger:</p>
+
+        <pre><code>gem install debugger-linecache -v '1.1.2' -- --with-ruby-include=$rvm_path/src/ruby-1.9.3-p286/
+</code></pre>
+
+        <p>1.8.7:</p>
+
+        <pre><code>rvm install ruby-1.8.7-p370 --without-tk
+</code></pre>
+
+        <p>ree:</p>
+
+        <pre><code>rvm install ree-1.8.7-2012.02 --without-tk --without-tcl
+</code></pre>
+      </li>
+    </ul>
+  </li>
+</ol>
+

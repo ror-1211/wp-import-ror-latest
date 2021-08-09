@@ -1,0 +1,45 @@
+<p>Mountain West Javascript starts today. <a href="https://twitter.com/floydophone">Peter Hunt</a>, Facebook developer and contributor to
+<a href="http://facebook.github.io/react/">reactjs.org</a> is first up presenting “Be predictable, not correct.”</p>
+
+<p>Here’s my notes:</p>
+
+<p>Even better: <a href="https://hackpad.com/Secrets-of-the-Virtual-DOM-ULWeSrnO3cF">Notes on Hackpad</a></p>
+
+<h2>Key Value Observation (KVO)</h2>
+<p>This is the pattern that Ember.js implements. Idea is to bind data to elements in the DOM.
+The problem is that we have to use units of computation that the platform gives you. This results in leaky abstractions. The developer
+has to hold to much information in their head and solutions become complex to implement. Can’t compose using primitivies
+Angular uses Dirty Checking.</p>
+
+<p>NOT the simpliest way to build things.</p>
+
+<h2>Reactive Design</h2>
+<p>In a mythical javascript language we could use Javascript primitives and we would have a reactive DOM.
+However, Javascript is not reactive. We do need to build some layer of abstraction. Reactjs built a reactive DOM.
+No databinding artifacts. Takes advantage of existing Javascript.</p>
+
+<h3>Virtual DOM</h3>
+<ul>
+  <li>Whenever anything may have changed, re-render everything</li>
+  <li>Diff the previous data previous with the next</li>
+  <li>Only update the DOM with what changed</li>
+</ul>
+
+<p>Avoid fighting the framework. Rerender and diffing feels expensive which is why we do data binding.</p>
+
+<ul>
+  <li>KVO entangles app code with observables.</li>
+  <li>Angualr style dirty chcking forces you to pass everything through $scope or $watch</li>
+  <li>Virtual DOM needs a signal to say anything may have changed</li>
+</ul>
+
+<h3>Performance</h3>
+<ul>
+  <li>Memory is more important for performance on mobile than CPU usage.</li>
+  <li>Render code is usually cheap.</li>
+  <li>Your view is usually smaller than your model.</li>
+</ul>
+
+<p>Three words:</p>
+<p>Simple composable primitives</p>
+

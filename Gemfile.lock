@@ -1,0 +1,17 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    front_matter_parser (1.0.1)
+    kramdown (2.3.1)
+      rexml
+    rexml (3.2.5)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  front_matter_parser
+  kramdown
+
+BUNDLED WITH
+   2.1.4

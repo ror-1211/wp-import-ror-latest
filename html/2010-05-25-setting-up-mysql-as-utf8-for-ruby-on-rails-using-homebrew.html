@@ -1,0 +1,30 @@
+<p>It took me far to much time to get this to work right so hopefully this is helpful for someone (probably me at some point in the future).</p>
+
+<p>The <a href="http://blog.therubymug.com/blog/2010/05/20/the-install-osx.html">hashrocket guys have a great writeup on configuring your development environment</a>. I didn’t need some of their bash configuration but it’s a great starting place.</p>
+
+<p>Once you have mysql installed with homebrew it can still be handy to customize your mysql configuration. <a href="http://darwinweb.net/articles/87">Here’s an article on how to configure my.cnf</a>.</p>
+
+<p>My configuration ended up looking like the code below which I got from this <a href="http://hugofrappier.wordpress.com/2010/01/01/rails-1-2-x-ruby-1-8-6-snow-leopard-the-missing-link/">article</a>. <a href="http://dev.mysql.com/doc/refman/5.0/en/server-system-variables.html">Here’s more info on the values you can specify</a>. I placed the code into ‘/etc/my.cnf’. That’s probably more global than most people want, but it works great for me.</p>
+
+<pre><code>[mysqld]
+#Max packetlength to send/receive from to server.
+max_allowed_packet=64M
+#socket = /var/mysql/mysql.sock
+character-set-server = utf8
+default-character-set = utf8
+
+#This option makes InnoDB to store each created table into its own .ibd file.
+innodb_file_per_table
+
+[mysql]
+default-character-set = utf8
+
+[client]
+#socket = /var/mysql/mysql.sock
+default-character-set=utf8
+</code></pre>
+
+<p>Here’s how I ended up installing the mysql gem. (Always a pain to get this right).</p>
+
+<pre><code>sudo env ARCHFLAGS="-arch x86_64" gem install mysql --no-rdoc --no-ri -- --with-mysql-config=/usr/local/bin/mysql_config
+</code></pre>
