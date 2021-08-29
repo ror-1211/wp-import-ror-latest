@@ -2,12 +2,20 @@ require 'base64'
 require 'front_matter_parser'
 require 'kramdown'
 require 'httparty'
-
+require 'byebug'
 
 WEBSITE = "https://justinball.com"
 # WEBSITE = "https://www.thebikecrank.com"
 POSTS_PATH = "/wp-json/wp/v2/posts"
 POST_URL = "#{WEBSITE}#{POSTS_PATH}"
+
+CATEGORIES_PATH = "/wp-json/wp/v2/categories"
+CATEGORIES_URL = "#{WEBSITE}#{CATEGORIES_PATH}"
+
+USERS_PATH = "/wp-json/wp/v2/user"
+USERS_URL = "#{WEBSITE}#{USERS_PATH}"
+
+AUTHOR_ID = 1
 
 bikes = [
   '2006-07-21-ruby-made-me-fatter-so-i-had-to-do-something',
@@ -92,6 +100,8 @@ bikes = [
 ]
 
 def process
+  current_categories = list_categories
+
   ext = ".md"
   files = Dir.glob("#{ENV['CONTENT_DIRECTORY']}/**/*#{ext}")
 
@@ -106,10 +116,10 @@ def process
       filename = "#{outDir}/#{name}.html"
       begin
         parsed = FrontMatterParser::Parser.parse_file(file)
-        parsed.front_matter #=> {'title' => 'Hello World', 'category' => 'Greetings'}
         html = Kramdown::Document.new(parsed.content).to_html
-        #puts "Writing #{filename}"
+        puts "Writing #{filename}"
         File.write(filename, html)
+        post_to_wp(parsed.front_matter, html, current_categories)
       rescue => ex
         puts "Error in #{filename}: #{ex}"
       end
@@ -119,23 +129,55 @@ end
 
 def list_posts
   puts "Getting: #{POST_URL}"
-  results = HTTParty.get(POST_URL)
-  puts results
+  HTTParty.get(POST_URL)
+end
+
+def list_categories
+  puts "Getting: #{CATEGORIES_URL}"
+  HTTParty.get(CATEGORIES_URL + "?hide_empty=false")
+end
+
+def create_category(name)
+  body = {
+    "name" => name,
+  }
+  do_post(CATEGORIES_URL, body)
+end
+
+def find_category_ids(categories, current_categories)
+  ids = []
+  categories.each do |category|
+    if found = current_categories.find{ |c| c["name"].downcase == category.downcase }
+      ids << found["id"]
+    else
+      result = create_category(category)
+      if result["code"] == "term_exists"
+        ids << result["data"]["term_id"]
+      else
+        ids << result["id"]
+      end
+    end
+  end
+
 end
 
 # developer.wordpress.org/rest-api/reference/posts/#create-a-post
-def post_to_wp
+def post_to_wp(front_matter, html, current_categories)
+  category_ids = find_category_ids(front_matter["categories"], current_categories)
   body = {
-    "title" => "My test",
-		"status" => "draft", # ok, we do not want to publish it immediately
-		"content" => "some test content",
-		"categories" => "Cycling", # category ID
-		"tags" => "blog", # string, comma separated
-		"date" => "2015-05-05T10:00:00", # YYYY-MM-DDTHH:MM:SS
-		"excerpt" => "Read this awesome post",
-		"slug" => "new-test-post" # part of the URL usually
+    "title" => front_matter["title"],
+		"status" => "publish", # ok, we do not want to publish it immediately
+		"content" => html,
+		"categories" => category_ids.join(","), # category ID
+		"tags" => front_matter["tags"].join(","), # string, comma separated
+		"date" => front_matter["date"], # YYYY-MM-DDTHH:MM:SS
+		"slug" => front_matter["permalink"].split("/").last, # part of the URL usually
+    "author" => AUTHOR_ID,
   }
+  puts do_post(POST_URL, body)
+end
 
+def do_post(url, body)
   auth = {
     username: ENV['API_USERNAME'],
     password: ENV['API_PASSWORD'],
@@ -146,10 +188,8 @@ def post_to_wp
     basic_auth: auth,
   }
 
-  puts "Posting to #{POST_URL} with #{options}"
-  response = HTTParty.post(POST_URL, options)
-  puts response
+  puts "Posting to #{url} with #{options}"
+  response = HTTParty.post(url, options)
 end
 
-post_to_wp
-list_posts
+# process
