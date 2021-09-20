@@ -1,8 +1,12 @@
-require 'base64'
-require 'front_matter_parser'
-require 'kramdown'
-require 'httparty'
-require 'byebug'
+require "active_support"
+require "active_support/core_ext/object/to_param"
+require "base64"
+require "front_matter_parser"
+require "json"
+require "kramdown"
+require "open-uri"
+require "rest-client"
+require "byebug"
 
 WEBSITE = "https://justinball.com"
 # WEBSITE = "https://www.thebikecrank.com"
@@ -12,12 +16,18 @@ POST_URL = "#{WEBSITE}#{POSTS_PATH}"
 CATEGORIES_PATH = "/wp-json/wp/v2/categories"
 CATEGORIES_URL = "#{WEBSITE}#{CATEGORIES_PATH}"
 
+TAGS_PATH = "/wp-json/wp/v2/tags"
+TAGS_URL = "#{WEBSITE}#{TAGS_PATH}"
+
 USERS_PATH = "/wp-json/wp/v2/user"
 USERS_URL = "#{WEBSITE}#{USERS_PATH}"
 
+MEDIA_PATH = "/wp-json/wp/v2/media"
+MEDIA_URL = "#{WEBSITE}#{MEDIA_PATH}"
+
 AUTHOR_ID = 1
 
-bikes = [
+BIKES = [
   '2006-07-21-ruby-made-me-fatter-so-i-had-to-do-something',
   '2006-08-29-tired-again',
   '2006-09-19-more-riding-and-i-feel-like-crap',
@@ -101,6 +111,7 @@ bikes = [
 
 def process
   current_categories = list_categories
+  current_tags = list_tags
 
   ext = ".md"
   files = Dir.glob("#{ENV['CONTENT_DIRECTORY']}/**/*#{ext}")
@@ -110,18 +121,64 @@ def process
     Dir.mkdir(outDir)
   end
 
+  posts = list_posts
   files.each do |file|
     if File.file?(file)
       name = File.basename(file.gsub("/index.md", ""))
       filename = "#{outDir}/#{name}.html"
       begin
+        dir = File.dirname(file)
         parsed = FrontMatterParser::Parser.parse_file(file)
+        front_matter = parsed.front_matter
         html = Kramdown::Document.new(parsed.content).to_html
         puts "Writing #{filename}"
         File.write(filename, html)
-        post_to_wp(parsed.front_matter, html, current_categories)
+        created_at = File.ctime(file)
+
+        title = front_matter["title"] || file_name
+        post = posts.find { |p| p["title"]["rendered"] == title }
+
+        if post
+          post_id = post["id"]
+        else
+          # Create the post so we have the id
+          post = post_to_wp(front_matter, title, html, current_categories, current_tags, name, created_at)
+          post_id = post["id"]
+        end
+
+        if front_matter[:imageUrl]
+          # Download the file
+          downloaded_img_path = File.join(dir, File.basename(image))
+          byebug
+          open(front_matter[:imageUrl]) do |image_data|
+            File.open(downloaded_img_path, "wb") do |file|
+              file.write(image_data.read)
+            end
+          end
+          byebug
+          img = upload_media(downloaded_img_path, post_id)
+          featured_media_id = img["id"]
+        end
+
+        images = Dir.glob("#{dir}/*.{jpg,png,gif}")
+        byebug if images.length > 0
+        images.each do |img|
+          image = upload_media(img, post_id)
+          # Update the html with the uploaded image
+          if image == front_matter
+            featured_media_id = image["id"]
+          end
+        end
+
+        byebug if images.length > 0
+
+        # Update the post with the new html
+        update_wp_post(post_id, featured_media_id, front_matter, html)
+
       rescue => ex
+        puts "***********************************************"
         puts "Error in #{filename}: #{ex}"
+        raise ex
       end
     end
   end
@@ -129,12 +186,53 @@ end
 
 def list_posts
   puts "Getting: #{POST_URL}"
-  HTTParty.get(POST_URL)
+  result = do_get(POST_URL)
+  JSON.parse(result.body)
+end
+
+def list_tags(page = 1)
+  puts "Getting: #{TAGS_URL}"
+  result = do_get(TAGS_URL + "?hide_empty=false&per_page=100&page=#{page}")
+  tags = JSON.parse(result)
+  if tags.length > 0
+    tags += list_tags(page + 1)
+  end
+  tags
+end
+
+def create_tag(name)
+  body = {
+    "name" => name,
+  }
+  do_post(TAGS_URL, body)
+end
+
+def find_tag_ids(tags, current_tags)
+  ids = []
+  tags.each do |tag|
+    if found = current_tags.find{ |c| c["name"].downcase == tag.downcase }
+      ids << found["id"]
+    else
+      begin
+        result = create_tag(tag)
+        ids << result["id"]
+      rescue => ex
+        json = JSON.parse(ex.http_body)
+        if json["code"] == "term_exists"
+          ids << json["data"]["term_id"]
+        else
+          raise ex
+        end
+      end
+    end
+  end
+  ids
 end
 
 def list_categories
   puts "Getting: #{CATEGORIES_URL}"
-  HTTParty.get(CATEGORIES_URL + "?hide_empty=false")
+  result = do_get(CATEGORIES_URL + "?hide_empty=false")
+  JSON.parse(result)
 end
 
 def create_category(name)
@@ -150,46 +248,133 @@ def find_category_ids(categories, current_categories)
     if found = current_categories.find{ |c| c["name"].downcase == category.downcase }
       ids << found["id"]
     else
-      result = create_category(category)
-      if result["code"] == "term_exists"
-        ids << result["data"]["term_id"]
-      else
+      begin
+        result = create_category(create_category)
         ids << result["id"]
+      rescue => ex
+        json = JSON.parse(ex.http_body)
+        if json["code"] == "term_exists"
+          ids << json["data"]["term_id"]
+        else
+          raise ex
+        end
       end
     end
   end
+  ids
+end
 
+def update_wp_post(post_id, featured_media_id, front_matter, html)
+  body = {
+    "title" => front_matter["title"],
+		"status" => "publish",
+		"content" => html,
+    "featured_media" => featured_media_id,
+    "author" => AUTHOR_ID,
+  }
+  do_put("#{POST_URL}/#{post_id}", body)
 end
 
 # developer.wordpress.org/rest-api/reference/posts/#create-a-post
-def post_to_wp(front_matter, html, current_categories)
-  category_ids = find_category_ids(front_matter["categories"], current_categories)
+def post_to_wp(front_matter, title, html, current_categories, current_tags, file_name, created_at)
+  categories = front_matter["categories"]
+  if BIKES.include?(file_name)
+    categories ||= []
+    categories << "Cycling"
+  end
+
+  category_ids = []
+  if categories
+    category_ids = find_category_ids(categories.uniq, current_categories)
+  end
+
+  tag_ids = []
+  if tags = front_matter["tags"]
+    tag_ids = find_tag_ids(tags.uniq, current_tags)
+  end
+
   body = {
-    "title" => front_matter["title"],
-		"status" => "publish", # ok, we do not want to publish it immediately
+    "title" => title,
+		"status" => "publish",
 		"content" => html,
-		"categories" => category_ids.join(","), # category ID
-		"tags" => front_matter["tags"].join(","), # string, comma separated
-		"date" => front_matter["date"], # YYYY-MM-DDTHH:MM:SS
-		"slug" => front_matter["permalink"].split("/").last, # part of the URL usually
     "author" => AUTHOR_ID,
   }
-  puts do_post(POST_URL, body)
+
+  body["categories"] = category_ids.join(",") if category_ids && category_ids.length > 0 # category ID
+  body["tags"] = tag_ids.join(",") if tag_ids && tag_ids.length > 0
+  body["date"] = Time.parse(front_matter["date"] || created_at).strftime("%Y-%m-%d %H:%M:%S") # YYYY-MM-DDTHH:MM:SS
+  body["slug"] = front_matter["permalink"].split("/").last if front_matter["permalink"] # part of the URL usually
+
+  do_post(POST_URL, body)
+end
+
+def upload_media(file_path, post_id)
+  query = {
+    status: "publish",
+    title: File.basename(file_path),
+    comment_status: "closed",
+    ping_status: "closed",
+    alt_text: File.basename(file_path),
+    description: "",
+    caption: "",
+    "author" => AUTHOR_ID,
+  }
+
+  url = "#{MEDIA_URL}?#{query.to_query}"
+
+  payload = {
+    :multipart => true,
+    :file => File.new(file_path, 'rb'),
+  }
+
+  do_post(url, body)
+end
+
+def do_put(url, body)
+  puts "Putting to #{url} with #{body}"
+  RestClient::Request.new(
+    :method => :put,
+    :url => url,
+    :user =>  ENV['API_USERNAME'],
+    :password => ENV['API_PASSWORD'],
+    :headers => {
+      :accept => :json
+    },
+    payload: body,
+  ).execute
 end
 
 def do_post(url, body)
-  auth = {
-    username: ENV['API_USERNAME'],
-    password: ENV['API_PASSWORD'],
-  }
-
-  options = {
-    body: body,
-    basic_auth: auth,
-  }
-
-  puts "Posting to #{url} with #{options}"
-  response = HTTParty.post(url, options)
+  puts "Posting to #{url} with #{body}"
+  RestClient::Request.new(
+    :method => :post,
+    :url => url,
+    :user =>  ENV['API_USERNAME'],
+    :password => ENV['API_PASSWORD'],
+    :headers => {
+      :accept => :json
+    },
+    payload: body,
+  ).execute
 end
 
-# process
+def do_get(url)
+  puts "Requesting #{url}"
+  RestClient::Request.new(
+    :method => :get,
+    :url => url,
+    :user =>  ENV['API_USERNAME'],
+    :password => ENV['API_PASSWORD'],
+    :headers => {
+      :accept => :json
+    },
+  ).execute
+end
+
+begin
+  process
+rescue => ex
+  puts "Error *****************************************************"
+  puts ex.http_body
+  raise ex
+end
