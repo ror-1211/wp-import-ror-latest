@@ -1,4 +1,0 @@
-<p>I don’t have to work a lot with SQL Server these days, but this evening I noticed that the maintenance tasks on one of my servers was not running. I went to the command line to run the task and got ‘SQL2005 or higher is required for sp_expressmaint’. Turns out there is a bug in the sp_expressmaint stored procedure that ships with SQL Server 2008 Express Edition. <a href="http://developers.de/blogs/senad_hajric/archive/2009/05/25/bug-sql-2008-express-edition-stored-procedure-sp-dbmaintenance.aspx">The first result on Google provided the solution</a>. Luckily it’s really easy to fix. Just open up the stored procedures on your master database (they’re under ‘programability’). Then find this line:</p>
-
-<pre><code>IF (select SUBSTRING(@@version,(CHARINDEX('-',@@version) 2),1))
-</code></pre>
