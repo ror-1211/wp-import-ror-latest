@@ -1,9 +1,0 @@
-<p>We have to do an integration with Saleforce for a Rails project we are working on. I keep getting this error:</p>
-
-<p>The :dependent option expects either :destroy or :delete (:nullify)</p>
-
-<p>I <a href="http://forums.sforce.com/sforce/board/message?board.id=PerlDevelopment&amp;message.id=3279">posted to the Salesforce forums</a> and didn’t get any response so I did some more investigation. Turns out there is a bug and a patch:</p>
-
-<p>http://rubyforge.org/tracker/index.php?func=detail&amp;aid=19960&amp;group_id=1201&amp;atid=4729</p>
-
-<p>Lucky for me the latest version of Rails has a feature that unpacks all of your gems into your vendor directory. I unpacked activesalesforce, made the code changes by applying the patch (which just removes :dependent =&gt; :nullify) and viola.</p>
