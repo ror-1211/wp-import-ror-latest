@@ -10,20 +10,12 @@ require "byebug"
 
 WEBSITE = "https://justinball.com"
 # WEBSITE = "https://www.thebikecrank.com"
+
 POSTS_PATH = "/wp-json/wp/v2/posts"
-POST_URL = "#{WEBSITE}#{POSTS_PATH}"
-
 CATEGORIES_PATH = "/wp-json/wp/v2/categories"
-CATEGORIES_URL = "#{WEBSITE}#{CATEGORIES_PATH}"
-
 TAGS_PATH = "/wp-json/wp/v2/tags"
-TAGS_URL = "#{WEBSITE}#{TAGS_PATH}"
-
 USERS_PATH = "/wp-json/wp/v2/user"
-USERS_URL = "#{WEBSITE}#{USERS_PATH}"
-
 MEDIA_PATH = "/wp-json/wp/v2/media"
-MEDIA_URL = "#{WEBSITE}#{MEDIA_PATH}"
 
 AUTHOR_ID = 1
 
@@ -108,273 +100,354 @@ BIKES = [
   '2014-07-08-crossed-4000-miles-for-the-year-tonight',
   '2015-05-04-mountain-bike-gear-ratios-1x-vs-2x-setup',
 ]
+class WpImport
+  def initialize(website_url, content_directory, output_directory, username, password)
+    @website_url = website_url
+    @content_directory = content_directory
+    @output_directory = output_directory
+    @username = username
+    @password= password
 
-def process
-  current_categories = list_categories
-  current_tags = list_tags
-
-  ext = ".md"
-  files = Dir.glob("#{ENV['CONTENT_DIRECTORY']}/**/*#{ext}")
-
-  outDir = ENV['OUTPUT_DIRECTORY']
-  if !Dir.exists?(outDir)
-    Dir.mkdir(outDir)
+    @current_categories = list_categories
+    @current_tags = list_tags
+    @posts = list_posts
   end
 
-  posts = list_posts
-  files.each do |file|
-    if File.file?(file)
-      name = File.basename(file.gsub("/index.md", ""))
-      filename = "#{outDir}/#{name}.html"
+  def import_posts
+    ext = ".md"
+    files = Dir.glob("#{@content_directory}/**/*#{ext}")
+
+    if !Dir.exists?(@output_directory)
+      Dir.mkdir(@output_directory)
+    end
+
+    files.each do |file|
+      if File.file?(file)
+        import_post(file)
+      end
+    end
+  end
+
+  def import_post(file)
+    name = File.basename(file.gsub("/index.md", ""))
+    filename = "#{@output_directory}/#{name}.html"
+    dir = File.dirname(file)
+    parsed = FrontMatterParser::Parser.parse_file(file)
+    front_matter = parsed.front_matter
+    html = Kramdown::Document.new(parsed.content).to_html
+    puts "Writing #{filename}"
+    File.write(filename, html)
+    created_at = File.ctime(file)
+
+    title = front_matter["title"] || file_name
+    post = @posts.find { |p| p["title"]["rendered"] == title }
+    if post
+      post_id = post["id"]
+    else
+      # Create the post so we have the id
+      post = post_to_wp(front_matter, title, html, name, created_at)
+      post_id = post["id"]
+    end
+
+    if img_url = front_matter["imageUrl"]
+      # Download the file
+      downloaded_img_path = File.join(dir, File.basename(img_url))
       begin
-        dir = File.dirname(file)
-        parsed = FrontMatterParser::Parser.parse_file(file)
-        front_matter = parsed.front_matter
-        html = Kramdown::Document.new(parsed.content).to_html
-        puts "Writing #{filename}"
-        File.write(filename, html)
-        created_at = File.ctime(file)
-
-        title = front_matter["title"] || file_name
-        post = posts.find { |p| p["title"]["rendered"] == title }
-
-        if post
-          post_id = post["id"]
-        else
-          # Create the post so we have the id
-          post = post_to_wp(front_matter, title, html, current_categories, current_tags, name, created_at)
-          post_id = post["id"]
+        open(img_url) do |image_data|
+          File.open(downloaded_img_path, "wb") do |file|
+            file.write(image_data.read)
+          end
         end
+        img = upload_media(downloaded_img_path, post_id)
+        featured_media_id = img["id"]
+      rescue => ex
+        byebug
+        puts ex
+      end
+    end
 
-        if front_matter[:imageUrl]
-          # Download the file
-          downloaded_img_path = File.join(dir, File.basename(image))
-          byebug
-          open(front_matter[:imageUrl]) do |image_data|
-            File.open(downloaded_img_path, "wb") do |file|
-              file.write(image_data.read)
+    uploaded_images = {}
+    images = Dir.glob("#{dir}/*.{jpg,png,gif}")
+    images.each do |img|
+      img_name = File.basename(img)
+      uploaded_images[img_name] = upload_media(img, post_id)
+
+      # Update the html with the uploaded image
+      # First try the image with a relative path
+      html = html.gsub("./#{img_name}", "/wp-content/uploads/#{uploaded_images[img_name]["media_details"]["file"]}")
+      # Then try just the image name
+      html = html.gsub(img_name, "/wp-content/uploads/#{uploaded_images[img_name]["media_details"]["file"]}")
+
+      featured_image = front_matter["image"] || front_matter["image"]
+      featured_image = File.basename(featured_image) if featured_image
+
+      if img_name == featured_image
+        featured_media_id = uploaded_images[img_name]["id"]
+      end
+    end
+
+    if !featured_media_id && uploaded_images.length > 0
+      featured_media_id = uploaded_images[uploaded_images.keys.first]["id"]
+    end
+
+    # Update the post with the new html
+    update_wp_post(post_id, featured_media_id, front_matter, html)
+
+  rescue => ex
+    puts "***********************************************"
+    puts "Error in #{filename}: #{ex}"
+    if ex.to_s.include?("HTTP status code 520")
+      # We are making to many calls to the server. Pause and try again.
+      sleep 2000
+      import_post(file)
+    else
+      byebug
+      raise ex
+    end
+  end
+
+  def list_posts(page = 1)
+    post_url = @website_url + POSTS_PATH
+    puts "Getting: #{post_url}"
+    result = do_get(post_url+ "?per_page=100&page=#{page}")
+    posts = JSON.parse(result.body)
+    if posts.length > 0
+      posts += list_posts(page + 1)
+    end
+    posts
+  rescue => ex
+    json = JSON.parse(ex.response.body)
+    if json["code"] == "rest_post_invalid_page_number"
+      return []
+    else
+      raise ex
+    end
+  end
+
+  def list_tags(page = 1)
+    tags_url = @website_url + TAGS_PATH
+    puts "Getting: #{tags_url}"
+    result = do_get(tags_url + "?hide_empty=false&per_page=100&page=#{page}")
+    tags = JSON.parse(result)
+    if tags.length > 0
+      tags += list_tags(page + 1)
+    end
+    tags
+  end
+
+  def create_tag(name)
+    tags_url = @website_url + TAGS_PATH
+    body = {
+      "name" => name,
+    }
+    result = do_post(tags_url, body)
+    JSON.parse(result)
+  end
+
+  def find_tag_ids(tags)
+    ids = []
+    tags.each do |tag|
+      if found = @current_tags.find{ |c| c["name"].downcase == tag.downcase }
+        byebug if found["id"] == "id"
+        ids << found["id"]
+      else
+        begin
+          json = create_tag(tag)
+          byebug if json["id"] == "id"
+          ids << json["id"]
+        rescue => ex
+          if ex.respond_to?(:http_body)
+            json = JSON.parse(ex.http_body)
+            if json["code"] == "term_exists"
+              ids << json["data"]["term_id"]
+            else
+              byebug
+              raise ex
             end
-          end
-          byebug
-          img = upload_media(downloaded_img_path, post_id)
-          featured_media_id = img["id"]
-        end
-
-        images = Dir.glob("#{dir}/*.{jpg,png,gif}")
-        byebug if images.length > 0
-        images.each do |img|
-          image = upload_media(img, post_id)
-          # Update the html with the uploaded image
-          if image == front_matter
-            featured_media_id = image["id"]
+          else
+            byebug
+            raise ex
           end
         end
-
-        byebug if images.length > 0
-
-        # Update the post with the new html
-        update_wp_post(post_id, featured_media_id, front_matter, html)
-
-      rescue => ex
-        puts "***********************************************"
-        puts "Error in #{filename}: #{ex}"
-        raise ex
       end
     end
+    ids
   end
-end
 
-def list_posts
-  puts "Getting: #{POST_URL}"
-  result = do_get(POST_URL)
-  JSON.parse(result.body)
-end
-
-def list_tags(page = 1)
-  puts "Getting: #{TAGS_URL}"
-  result = do_get(TAGS_URL + "?hide_empty=false&per_page=100&page=#{page}")
-  tags = JSON.parse(result)
-  if tags.length > 0
-    tags += list_tags(page + 1)
+  def list_categories
+    categories_url = @website_url + CATEGORIES_PATH
+    puts "Getting: #{categories_url}"
+    result = do_get(categories_url + "?hide_empty=false")
+    JSON.parse(result)
   end
-  tags
-end
 
-def create_tag(name)
-  body = {
-    "name" => name,
-  }
-  do_post(TAGS_URL, body)
-end
+  def create_category(name)
+    body = {
+      "name" => name,
+    }
+    result = do_post(@website_url + CATEGORIES_PATH, body)
+    JSON.parse(result)
+  end
 
-def find_tag_ids(tags, current_tags)
-  ids = []
-  tags.each do |tag|
-    if found = current_tags.find{ |c| c["name"].downcase == tag.downcase }
-      ids << found["id"]
-    else
-      begin
-        result = create_tag(tag)
-        ids << result["id"]
-      rescue => ex
-        json = JSON.parse(ex.http_body)
-        if json["code"] == "term_exists"
-          ids << json["data"]["term_id"]
-        else
-          raise ex
+  def find_category_ids(categories)
+    ids = []
+    categories.each do |category|
+      if found = @current_categories.find{ |c| c["name"].downcase == category.downcase }
+        byebug if found["id"]=="id"
+        ids << found["id"]
+      else
+        begin
+          json = create_category(category)
+byebug if json["id"]=="id"
+          ids << json["id"]
+        rescue => ex
+          if ex.respond_to?(:http_body)
+            json = JSON.parse(ex.http_body)
+            if json["code"] == "term_exists"
+              byebug if json["data"]["term_id"]=="id"
+              ids << json["data"]["term_id"]
+            else
+              byebug
+              raise ex
+            end
+          else
+            byebug
+            raise ex
+          end
         end
       end
     end
+    ids
   end
-  ids
-end
 
-def list_categories
-  puts "Getting: #{CATEGORIES_URL}"
-  result = do_get(CATEGORIES_URL + "?hide_empty=false")
-  JSON.parse(result)
-end
+  def update_wp_post(post_id, featured_media_id, front_matter, html)
+    body = {
+      "title" => front_matter["title"],
+      "status" => "publish",
+      "content" => html,
+      "author" => AUTHOR_ID,
+    }
+    if featured_media_id
+      body["featured_media"] = featured_media_id
+    end
+    do_put("#{@website_url}#{POSTS_PATH}/#{post_id}", body)
+  end
 
-def create_category(name)
-  body = {
-    "name" => name,
-  }
-  do_post(CATEGORIES_URL, body)
-end
+  # developer.wordpress.org/rest-api/reference/posts/#create-a-post
+  def post_to_wp(front_matter, title, html, file_name, created_at)
+    categories = front_matter["categories"]
+    if BIKES.include?(file_name)
+      categories ||= []
+      categories << "Cycling"
+    end
 
-def find_category_ids(categories, current_categories)
-  ids = []
-  categories.each do |category|
-    if found = current_categories.find{ |c| c["name"].downcase == category.downcase }
-      ids << found["id"]
-    else
-      begin
-        result = create_category(create_category)
-        ids << result["id"]
-      rescue => ex
-        json = JSON.parse(ex.http_body)
-        if json["code"] == "term_exists"
-          ids << json["data"]["term_id"]
-        else
-          raise ex
-        end
+    if !categories || categories.empty?
+      categories = front_matter["tags"]
+    end
+
+    category_ids = []
+    if categories
+      category_ids = find_category_ids(categories.uniq)
+    end
+
+    tag_ids = []
+    if tags = front_matter["tags"]
+      tag_ids = find_tag_ids(tags.uniq)
+      if tag_ids.include?("id")
+        # try again
+        byebug
+        tag_ids = find_tag_ids(tags.uniq)
       end
     end
-  end
-  ids
-end
 
-def update_wp_post(post_id, featured_media_id, front_matter, html)
-  body = {
-    "title" => front_matter["title"],
-		"status" => "publish",
-		"content" => html,
-    "featured_media" => featured_media_id,
-    "author" => AUTHOR_ID,
-  }
-  do_put("#{POST_URL}/#{post_id}", body)
-end
+    body = {
+      "title" => title,
+      "status" => "publish",
+      "content" => html,
+      "author" => AUTHOR_ID,
+    }
 
-# developer.wordpress.org/rest-api/reference/posts/#create-a-post
-def post_to_wp(front_matter, title, html, current_categories, current_tags, file_name, created_at)
-  categories = front_matter["categories"]
-  if BIKES.include?(file_name)
-    categories ||= []
-    categories << "Cycling"
+    body["categories"] = category_ids.join(",") if category_ids && category_ids.length > 0 # category ID
+    body["tags"] = tag_ids.join(",") if tag_ids && tag_ids.length > 0
+    body["date"] = Time.parse(front_matter["date"] || created_at).strftime("%Y-%m-%d %H:%M:%S") # YYYY-MM-DDTHH:MM:SS
+    body["slug"] = front_matter["permalink"].split("/").last if front_matter["permalink"] # part of the URL usually
+
+    result = do_post("#{@website_url}#{POSTS_PATH}", body)
+    JSON.parse(result)
   end
 
-  category_ids = []
-  if categories
-    category_ids = find_category_ids(categories.uniq, current_categories)
+  def upload_media(file_path, post_id)
+    query = {
+      status: "publish",
+      title: File.basename(file_path),
+      comment_status: "closed",
+      ping_status: "closed",
+      alt_text: File.basename(file_path),
+      description: "",
+      caption: "",
+      "author" => AUTHOR_ID,
+    }
+
+    body = {
+      :multipart => true,
+      :file => File.new(file_path, 'rb'),
+    }
+
+    result = do_post("#{@website_url}#{MEDIA_PATH}?#{query.to_query}", body)
+    JSON.parse(result)
   end
 
-  tag_ids = []
-  if tags = front_matter["tags"]
-    tag_ids = find_tag_ids(tags.uniq, current_tags)
+  def do_put(url, body)
+    puts "Putting to #{url} with #{body}"
+    RestClient::Request.new(
+      :method => :put,
+      :url => url,
+      :user => @username,
+      :password => @password,
+      :headers => {
+        :accept => :json
+      },
+      payload: body,
+    ).execute
   end
 
-  body = {
-    "title" => title,
-		"status" => "publish",
-		"content" => html,
-    "author" => AUTHOR_ID,
-  }
+  def do_post(url, body)
+    puts "Posting to #{url} with #{body}"
+    RestClient::Request.new(
+      :method => :post,
+      :url => url,
+      :user =>  @username,
+      :password => @password,
+      :headers => {
+        :accept => :json
+      },
+      payload: body,
+    ).execute
+  end
 
-  body["categories"] = category_ids.join(",") if category_ids && category_ids.length > 0 # category ID
-  body["tags"] = tag_ids.join(",") if tag_ids && tag_ids.length > 0
-  body["date"] = Time.parse(front_matter["date"] || created_at).strftime("%Y-%m-%d %H:%M:%S") # YYYY-MM-DDTHH:MM:SS
-  body["slug"] = front_matter["permalink"].split("/").last if front_matter["permalink"] # part of the URL usually
-
-  do_post(POST_URL, body)
+  def do_get(url)
+    puts "Requesting #{url}"
+    RestClient::Request.new(
+      :method => :get,
+      :url => url,
+      :user =>  @username,
+      :password => @password,
+      :headers => {
+        :accept => :json
+      },
+    ).execute
+  end
 end
 
-def upload_media(file_path, post_id)
-  query = {
-    status: "publish",
-    title: File.basename(file_path),
-    comment_status: "closed",
-    ping_status: "closed",
-    alt_text: File.basename(file_path),
-    description: "",
-    caption: "",
-    "author" => AUTHOR_ID,
-  }
-
-  url = "#{MEDIA_URL}?#{query.to_query}"
-
-  payload = {
-    :multipart => true,
-    :file => File.new(file_path, 'rb'),
-  }
-
-  do_post(url, body)
-end
-
-def do_put(url, body)
-  puts "Putting to #{url} with #{body}"
-  RestClient::Request.new(
-    :method => :put,
-    :url => url,
-    :user =>  ENV['API_USERNAME'],
-    :password => ENV['API_PASSWORD'],
-    :headers => {
-      :accept => :json
-    },
-    payload: body,
-  ).execute
-end
-
-def do_post(url, body)
-  puts "Posting to #{url} with #{body}"
-  RestClient::Request.new(
-    :method => :post,
-    :url => url,
-    :user =>  ENV['API_USERNAME'],
-    :password => ENV['API_PASSWORD'],
-    :headers => {
-      :accept => :json
-    },
-    payload: body,
-  ).execute
-end
-
-def do_get(url)
-  puts "Requesting #{url}"
-  RestClient::Request.new(
-    :method => :get,
-    :url => url,
-    :user =>  ENV['API_USERNAME'],
-    :password => ENV['API_PASSWORD'],
-    :headers => {
-      :accept => :json
-    },
-  ).execute
-end
 
 begin
-  process
+  importer = WpImport.new(WEBSITE, ENV['CONTENT_DIRECTORY'], ENV['OUTPUT_DIRECTORY'], ENV['API_USERNAME'], ENV['API_PASSWORD'])
+  importer.import_posts
 rescue => ex
   puts "Error *****************************************************"
-  puts ex.http_body
+  puts ex
+  puts ex.http_body if ex.respond_to?(:http_body)
+  File.write("error.html", ex)
+  byebug
   raise ex
 end
