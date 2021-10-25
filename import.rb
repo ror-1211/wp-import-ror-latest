@@ -124,6 +124,8 @@ class WpImport
     files.each do |file|
       if File.file?(file)
         import_post(file)
+        # Slow down so we don't overwhelm the server
+        sleep(1)
       end
     end
   end
@@ -198,7 +200,7 @@ class WpImport
     puts "Error in #{filename}: #{ex}"
     if ex.to_s.include?("HTTP status code 520")
       # We are making to many calls to the server. Pause and try again.
-      sleep 2000
+      sleep 2
       import_post(file)
     else
       byebug
