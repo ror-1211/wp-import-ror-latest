@@ -123,14 +123,17 @@ class WpImport
 
     files.each do |file|
       if File.file?(file)
-        import_post(file)
-        # Slow down so we don't overwhelm the server
-        sleep(1)
+        if import_post(file)
+          # Slow down so we don't overwhelm the server
+          sleep(1)
+        end
       end
     end
   end
 
   def import_post(file)
+    puts "*******************************************************************************"
+    puts "importing: #{file}"
     name = File.basename(file.gsub("/index.md", ""))
     filename = "#{@output_directory}/#{name}.html"
     dir = File.dirname(file)
@@ -144,6 +147,9 @@ class WpImport
     title = front_matter["title"] || file_name
     post = @posts.find { |p| p["title"]["rendered"] == title }
     if post
+      puts "post already exists"
+      puts "-------------------------------------"
+      return false
       post_id = post["id"]
     else
       # Create the post so we have the id
@@ -151,7 +157,8 @@ class WpImport
       post_id = post["id"]
     end
 
-    if img_url = front_matter["imageUrl"]
+    img_url = front_matter["imageUrl"]
+    if img_url && img_url.length > 0
       # Download the file
       downloaded_img_path = File.join(dir, File.basename(img_url))
       begin
@@ -163,7 +170,7 @@ class WpImport
         img = upload_media(downloaded_img_path, post_id)
         featured_media_id = img["id"]
       rescue => ex
-        byebug
+        # byebug
         puts ex
       end
     end
@@ -206,6 +213,8 @@ class WpImport
       byebug
       raise ex
     end
+
+    return true
   end
 
   def list_posts(page = 1)

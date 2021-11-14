@@ -5,3 +5,5 @@ gem 'byebug'
 gem 'front_matter_parser'
 gem 'kramdown'
 gem 'rest-client'
+
+gem 'rubocop'
